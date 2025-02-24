@@ -4,8 +4,7 @@ version = "0.1.0"
 authors = ["Locha Mesh Developers <contact@locha.io>"]
 edition = "2018"
 
-[workspace]
-members = ["prog-cli"]
+# Removing workspace crate, can use the prog as an example
 
 [dependencies]
 serial = "0.4"
