@@ -206,7 +206,7 @@ where
 }
 
 /// Reads the flash size from the memory.
-pub fn read_flash_size<P>(device: &mut Device<P>) -> io::Result<u32>
+pub fn read_flash_size_bytes<P>(device: &mut Device<P>) -> io::Result<u32>
 where
     P: serial::SerialPort,
 {
@@ -255,7 +255,7 @@ where
     let secondary_addr_offset = match device.family() {
         Family::CC2538 => 0x0027ffcc,
         Family::CC26X0 | Family::CC26X2 => {
-            let ccfg_offset = read_flash_size(device)? - CCFG_SIZE as u32;
+            let ccfg_offset = read_flash_size_bytes(device)? - CCFG_SIZE as u32;
 
             ccfg_offset + 0x20
         }
