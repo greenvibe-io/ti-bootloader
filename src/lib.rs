@@ -644,8 +644,8 @@ pub mod test {
             }
             fn reconfigure(
                 &mut self,
-                _setup: &Fn(
-                    &mut serial::SerialPortSettings,
+                _setup: &dyn Fn(
+                    &mut dyn serial::SerialPortSettings,
                 ) -> serial::Result<()>,
             ) -> serial::Result<()> {
                 unreachable!()
