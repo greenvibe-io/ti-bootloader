@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 ti-sbl = { path = "..", version = "0.1" }
-serial = "0.4"
+serialport = { git = "https://github.com/DoumanAsh/serialport-rs", branch = "overlapped_io" }
 
 clap = "2"
 anyhow = "1"

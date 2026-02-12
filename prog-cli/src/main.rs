@@ -16,7 +16,7 @@
 use std::ffi::OsString;
 use std::{path::PathBuf, time::Duration};
 
-use serial::SerialPort;
+use serialport::SerialPort;
 
 use anyhow::{bail, Context, Result};
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, SubCommand};

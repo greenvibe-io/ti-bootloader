@@ -46,14 +46,13 @@ const CC26XX_FCFG1_O_MAC_15_4_0: u32 = 0x000002F0;
 const CC2538_FLASH_CTRL_O_DIECFG0: u32 = 0x400D3014;
 
 /// Erase a flash range.
-pub fn erase_flash_range<P, F>(
-    device: &mut Device<P>,
+pub fn erase_flash_range<F>(
+    device: &mut Device,
     start_address: u32,
     byte_count: u32,
     mut progress: F,
 ) -> io::Result<()>
 where
-    P: serial::SerialPort,
     F: FnMut(f32, u32),
 {
     let family = device.family();
@@ -108,13 +107,12 @@ pub struct Transfer<'a> {
 }
 
 /// Write the flash.
-pub fn write_flash_range<'a, P, F>(
-    device: &mut Device<P>,
+pub fn write_flash_range<'a, F>(
+    device: &mut Device,
     transfers: &[Transfer<'a>],
     mut progress: F,
 ) -> io::Result<()>
 where
-    P: serial::SerialPort,
     F: FnMut(usize, f32, u32, u32),
 {
     let family = device.family();
@@ -206,10 +204,7 @@ where
 }
 
 /// Reads the flash size from the memory.
-pub fn read_flash_size_bytes<P>(device: &mut Device<P>) -> io::Result<u32>
-where
-    P: serial::SerialPort,
-{
+pub fn read_flash_size_bytes(device: &mut Device) -> io::Result<u32> {
     let addr = match device.family() {
         Family::CC2538 => CC2538_FLASH_CTRL_O_DIECFG0,
         Family::CC26X0 | Family::CC26X2 => CC26XX_FLASH_O_FLASH_SIZE,
@@ -241,12 +236,9 @@ where
 }
 
 /// Read IEEE 802.15.4g MAC address.
-pub fn read_ieee_address<P>(
-    device: &mut Device<P>,
-) -> io::Result<([u8; 8], [u8; 8])>
-where
-    P: serial::SerialPort,
-{
+pub fn read_ieee_address(
+    device: &mut Device,
+) -> io::Result<([u8; 8], [u8; 8])> {
     let primary_addr_offset = match device.family() {
         Family::CC2538 => 0x00280028,
         Family::CC26X0 | Family::CC26X2 => CC26XX_FCFG1_O_MAC_15_4_0,

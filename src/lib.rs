@@ -38,7 +38,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use serial::SerialPort;
+use serialport::{DataBits, FlowControl, SerialPort, StopBits};
 
 #[rustfmt::skip]
 pub mod constants;
@@ -50,15 +50,12 @@ pub use self::family::Family;
 
 /// A TI connected device supporting the Serial Bootloader Interface
 /// (SBL).
-pub struct Device<P> {
+pub struct Device {
     family: Family,
-    port: P,
+    port: Box<dyn SerialPort>,
 }
 
-impl<P> Device<P>
-where
-    P: SerialPort,
-{
+impl Device {
     /// Create a new `Device` from an already opened port.
     ///
     /// This will synchronize the baudrate with the device.
@@ -69,7 +66,7 @@ where
     /// to enter bootloader please reset the device into this mode or use
     /// [`invoke_bootloader`] function to enter the bootloader on the device
     /// (on supported boards).
-    pub fn new(port: P, family: Family) -> io::Result<Self> {
+    pub fn new(port: Box<dyn SerialPort>, family: Family) -> io::Result<Self> {
         let mut device = Device { port, family };
 
         device.init_communications()?;
@@ -509,10 +506,7 @@ where
     }
 }
 
-impl<P> fmt::Debug for Device<P>
-where
-    P: SerialPort,
-{
+impl fmt::Debug for Device {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("Device")
             .field("family", &self.family)
@@ -534,77 +528,13 @@ fn command_checksum(cmd: u8, data: &[u8]) -> u8 {
 ///
 /// It's recommended to change only the baudrate since all other
 /// options are the same for all Texas Instruments devices.
-pub fn port_settings() -> serial::PortSettings {
-    serial::PortSettings {
-        baud_rate: serial::BaudRate::Baud115200,
-        char_size: serial::CharSize::Bits8,
-        parity: serial::Parity::ParityNone,
-        stop_bits: serial::StopBits::Stop1,
-        flow_control: serial::FlowControl::FlowNone,
-    }
-}
-
-/// Use the DTR and RTS lines to control bootloader and the !RESET pin.
-/// This can automatically invoke the bootloader without the user
-/// having to toggle any pins.
-///
-/// # Parameters:
-///
-/// - `inverted`: if it's `false` (default) DTR is connected to the bootloader pin,
-/// RTS connnected to !RESET. If it's `true` it's the other way around
-/// - `bootloader_active_high`: whether the bootloader pin used is active low or
-/// active high.
-#[allow(clippy::needless_bool)]
-pub fn invoke_bootloader<P>(
-    port: &mut P,
-    inverted: bool,
-    bootloader_active_high: bool,
-) -> serial::Result<()>
-where
-    P: SerialPort,
-{
-    fn set_bootloader_pin<P: SerialPort>(
-        port: &mut P,
-        inverted: bool,
-        level: bool,
-    ) -> serial::Result<()> {
-        if inverted {
-            port.set_rts(level)
-        } else {
-            port.set_dtr(level)
-        }
-    }
-
-    fn set_reset_pin<P: SerialPort>(
-        port: &mut P,
-        inverted: bool,
-        level: bool,
-    ) -> serial::Result<()> {
-        if inverted {
-            port.set_dtr(level)
-        } else {
-            port.set_rts(level)
-        }
-    }
-
-    set_bootloader_pin(
-        port,
-        inverted,
-        if !bootloader_active_high { true } else { false },
-    )?;
-    set_reset_pin(port, inverted, false)?;
-    set_reset_pin(port, inverted, true)?;
-    set_reset_pin(port, inverted, false)?;
-    // Make sure the pin is still asserted when the chip comes out of reset.
-    #[cfg(not(test))]
-    std::thread::sleep(Duration::from_millis(2));
-    set_bootloader_pin(
-        port,
-        inverted,
-        if !bootloader_active_high { false } else { true },
-    )?;
-
-    Ok(())
+pub fn port_settings(path: &str) -> serialport::SerialPortBuilder {
+    serialport::new(path, 115_200)
+        .data_bits(DataBits::Eight)
+        .flow_control(FlowControl::None)
+        .parity(serialport::Parity::None)
+        .stop_bits(StopBits::One)
+        .timeout(Duration::from_millis(100))
 }
 
 #[cfg(test)]
@@ -616,113 +546,5 @@ pub mod test {
         // nonsensical data, just to make sure it works.
         const DATA: &[u8] = &[0xde, 0xad, 0xbe, 0xef];
         assert_eq!(command_checksum(0xCA, DATA), 0x02);
-    }
-
-    #[test]
-    #[allow(bare_trait_objects)]
-    fn test_invoke_bootloader() {
-        struct DummySerialPort {
-            rts_state: bool,
-            dtr_state: bool,
-        }
-
-        impl SerialPort for DummySerialPort {
-            fn timeout(&self) -> Duration {
-                unreachable!()
-            }
-            fn set_timeout(
-                &mut self,
-                _timeout: Duration,
-            ) -> serial::Result<()> {
-                unreachable!()
-            }
-            fn configure(
-                &mut self,
-                _settings: &serial::PortSettings,
-            ) -> serial::Result<()> {
-                unreachable!()
-            }
-            fn reconfigure(
-                &mut self,
-                _setup: &dyn Fn(
-                    &mut dyn serial::SerialPortSettings,
-                ) -> serial::Result<()>,
-            ) -> serial::Result<()> {
-                unreachable!()
-            }
-            fn set_rts(&mut self, level: bool) -> serial::Result<()> {
-                self.rts_state = level;
-                Ok(())
-            }
-            fn set_dtr(&mut self, level: bool) -> serial::Result<()> {
-                self.dtr_state = level;
-                Ok(())
-            }
-            fn read_cts(&mut self) -> serial::Result<bool> {
-                unreachable!()
-            }
-            fn read_dsr(&mut self) -> serial::Result<bool> {
-                unreachable!()
-            }
-            fn read_ri(&mut self) -> serial::Result<bool> {
-                unreachable!()
-            }
-            fn read_cd(&mut self) -> serial::Result<bool> {
-                unreachable!()
-            }
-        }
-
-        impl io::Read for DummySerialPort {
-            fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-                unreachable!()
-            }
-        }
-
-        impl io::Write for DummySerialPort {
-            fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-                unreachable!()
-            }
-            fn flush(&mut self) -> io::Result<()> {
-                unreachable!()
-            }
-        }
-
-        // Initial state
-        let mut port = DummySerialPort {
-            rts_state: false,
-            dtr_state: false,
-        };
-
-        // Test that the invoke functionality leaves the pins on their normal level.
-        invoke_bootloader(&mut port, false, false).unwrap();
-        assert_eq!(port.rts_state, false);
-        assert_eq!(port.dtr_state, false);
-
-        // Reset values.
-        port.rts_state = false;
-        port.dtr_state = false;
-
-        // Test that the invoke functionality leaves the pins on their normal level.
-        invoke_bootloader(&mut port, true, false).unwrap();
-        assert_eq!(port.rts_state, false);
-        assert_eq!(port.dtr_state, false);
-
-        // Reset values, now for active-high.
-        port.rts_state = false;
-        port.dtr_state = true;
-
-        // Test that the invoke functionality leaves the pins on their normal level.
-        invoke_bootloader(&mut port, false, true).unwrap();
-        assert_eq!(port.rts_state, false);
-        assert_eq!(port.dtr_state, true);
-
-        // Reset values, now for active-high and inverted.
-        port.rts_state = true;
-        port.dtr_state = false;
-
-        // Test that the invoke functionality leaves the pins on their normal level.
-        invoke_bootloader(&mut port, true, true).unwrap();
-        assert_eq!(port.rts_state, true);
-        assert_eq!(port.dtr_state, false);
     }
 }
