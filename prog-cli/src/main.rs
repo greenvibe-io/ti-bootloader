@@ -128,7 +128,7 @@ fn main() -> Result<()> {
                 todo!();
             }
 
-            let flash_size = ti_sbl::util::read_flash_size(&mut device)
+            let flash_size = ti_sbl::util::read_flash_size_bytes(&mut device)
                 .context("Couldn't read flash size")?;
             log::info!("Flash size: {} K", flash_size / 1024);
 
